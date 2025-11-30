@@ -1,5 +1,5 @@
 // ----------------------------------------------------------
-// SOLAR MEDIC — FULL PROFESSIONAL VERSION (WITH RESEARCH PAPER + DISCLAIMER)
+// SOLAR MEDIC — FINAL ICON VERSION (NO NETWORK IMAGES)
 // ----------------------------------------------------------
 
 import 'dart:convert';
@@ -14,11 +14,10 @@ import 'package:url_launcher/url_launcher.dart';
 // ----------------------------------------------------------
 // CONFIG
 // ----------------------------------------------------------
-const String API_KEY = "AIzaSyDC6zPeu-RHNCd0n5yeds-UmqsDfv0Rtko"; // <-- YOUR GEMINI API KEY
+const String API_KEY = "AIzaSyDC6zPeu-RHNCd0n5yeds-UmqsDfv0Rtko"; // <-- ADD GEMINI KEY HERE
 
-const Color primaryPurple = Color(0xFF7C3AED);
-const Color secondaryPurple = Color(0xFFA78BFA);
-const Color bgDark = Color(0xFF0F0518);
+const Color bgTop = Color(0xFF4A1F8E);
+const Color bgBottom = Color(0xFF1A0A3A);
 
 // ----------------------------------------------------------
 void main() => runApp(const SolarMedicApp());
@@ -30,21 +29,24 @@ class SolarMedicApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Solar Medic',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: bgDark,
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
         textTheme: GoogleFonts.poppinsTextTheme(
-          Theme.of(context).textTheme.apply(bodyColor: Colors.white),
+          Theme.of(context).textTheme.apply(
+                bodyColor: Colors.white,
+                displayColor: Colors.white,
+              ),
         ),
         useMaterial3: true,
       ),
-      debugShowCheckedModeBanner: false,
       home: const SolarMedicScreen(),
     );
   }
 }
 
 // ----------------------------------------------------------
-// SCREEN
+// MAIN SCREEN
 // ----------------------------------------------------------
 class SolarMedicScreen extends StatefulWidget {
   const SolarMedicScreen({super.key});
@@ -55,8 +57,8 @@ class SolarMedicScreen extends StatefulWidget {
 class _SolarMedicScreenState extends State<SolarMedicScreen> {
   // Location
   String locationText = "Locating...";
-  double lat = 18.5204;
-  double lon = 73.8567;
+  double lat = 18.52;
+  double lon = 73.85;
 
   // Data
   double currentUV = 0;
@@ -64,7 +66,7 @@ class _SolarMedicScreenState extends State<SolarMedicScreen> {
   String currentTithi = "--";
   String currentNakshatra = "--";
 
-  // UI
+  // AI UI
   final TextEditingController _condition = TextEditingController();
   String aiResponse = "";
   bool isAnalyzing = false;
@@ -76,7 +78,16 @@ class _SolarMedicScreenState extends State<SolarMedicScreen> {
   }
 
   // ----------------------------------------------------------
-  // 1. LOCATION INIT
+  // TOAST
+  // ----------------------------------------------------------
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  // ----------------------------------------------------------
+  // LOCATION
   // ----------------------------------------------------------
   Future<void> _initLocation() async {
     bool enabled = await Geolocator.isLocationServiceEnabled();
@@ -86,30 +97,31 @@ class _SolarMedicScreenState extends State<SolarMedicScreen> {
       return;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+    LocationPermission p = await Geolocator.checkPermission();
+    if (p == LocationPermission.denied) {
+      p = await Geolocator.requestPermission();
     }
 
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    if (p == LocationPermission.denied ||
+        p == LocationPermission.deniedForever) {
       locationText = "GPS Denied";
       _fetchData();
       return;
     }
 
-    Position p = await Geolocator.getCurrentPosition();
+    Position pos = await Geolocator.getCurrentPosition();
     setState(() {
-      lat = p.latitude;
-      lon = p.longitude;
-      locationText = "${lat.toStringAsFixed(2)}, ${lon.toStringAsFixed(2)}";
+      lat = pos.latitude;
+      lon = pos.longitude;
+      locationText =
+          "Lat ${lat.toStringAsFixed(2)}, Lon ${lon.toStringAsFixed(2)}";
     });
 
     _fetchData();
   }
 
   // ----------------------------------------------------------
-  // 2. FETCH PANCHANG + WEATHER
+  // WEATHER + PANCHANG
   // ----------------------------------------------------------
   Future<void> _fetchData() async {
     // Panchang
@@ -122,12 +134,11 @@ class _SolarMedicScreenState extends State<SolarMedicScreen> {
     // Weather
     try {
       final url = Uri.parse(
-          "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,uv_index&timezone=auto");
+          "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=uv_index,temperature_2m&timezone=auto");
 
       final r = await http.get(url);
       if (r.statusCode == 200) {
         final data = jsonDecode(r.body);
-
         setState(() {
           currentUV = data["current"]["uv_index"];
           currentTemp = data["current"]["temperature_2m"];
@@ -137,16 +148,15 @@ class _SolarMedicScreenState extends State<SolarMedicScreen> {
   }
 
   // ----------------------------------------------------------
-  // 3. AI ADVICE
+  // GEMINI AI
   // ----------------------------------------------------------
   Future<void> _getAdvice(String mode) async {
     if (_condition.text.trim().isEmpty) {
-      _toast("Please describe your condition.");
+      _toast("Describe your condition first.");
       return;
     }
-
     if (API_KEY.isEmpty) {
-      _toast("Please add Gemini API Key.");
+      _toast("Add Gemini API Key.");
       return;
     }
 
@@ -154,113 +164,117 @@ class _SolarMedicScreenState extends State<SolarMedicScreen> {
 
     String prompt = mode == "quick"
         ? """
-Act as an Ayurvedic Heliotherapist.
+Act as a heliotherapist.
 Condition: "${_condition.text}"
-Live Data: UV $currentUV, Temp $currentTemp, Tithi $currentTithi, Nakshatra $currentNakshatra.
-Give:
-1. Is sunlight safe RIGHT NOW?
-2. How Tithi affects it?
-3. Precautions?
+UV: $currentUV, Temp: $currentTemp, Tithi: $currentTithi, Nakshatra: $currentNakshatra.
+Give short advice:
+1. Is sunlight safe right now?
+2. Tithi effect
+3. Precautions
 """
         : """
 Act as an Ayurvedic Doctor.
 Condition: "${_condition.text}"
-Tithi: $currentTithi, Nakshatra: $currentNakshatra.
-Give a structured daily routine (Dinacharya) including:
-• Sun exposure time
-• Diet
-• Restrictions
-• Reasoning
+Give a daily routine using Tithi $currentTithi and Nakshatra $currentNakshatra.
+Include sun exposure + diet + restrictions.
 """;
 
     try {
       final url = Uri.parse(
           "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=$API_KEY");
 
-      final response = await http.post(url,
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "contents": [
-              {
-                "parts": [
-                  {"text": prompt}
-                ]
-              }
-            ]
-          }));
+      final r = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "contents": [
+            {
+              "parts": [
+                {"text": prompt}
+              ]
+            }
+          ]
+        }),
+      );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          aiResponse = data["candidates"][0]["content"]["parts"][0]["text"];
-        });
+      if (r.statusCode == 200) {
+        final data = jsonDecode(r.body);
+        aiResponse = data["candidates"][0]["content"]["parts"][0]["text"];
       } else {
-        aiResponse = "Error fetching AI result.";
+        aiResponse = "AI Error.";
       }
     } catch (e) {
-      aiResponse = "Connection failed: $e";
+      aiResponse = "Connection Error: $e";
     }
 
     setState(() => isAnalyzing = false);
   }
 
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   // ----------------------------------------------------------
-  // BUILD UI
+  // UI
   // ----------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.7),
-            radius: 1.4,
-            colors: [Color(0xFF2E1065), Colors.black],
+          gradient: LinearGradient(
+            colors: [bgTop, bgBottom],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
 
-                _header(),
+              _header(),
 
-                const SizedBox(height: 20),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    _card(
+                        title: "UV Index",
+                        subtitle:
+                            "$currentUV • ${_uvDesc(currentUV)}",
+                        icon: LucideIcons.sun),
 
-                _locationChip(),
+                    _card(
+                        title: "Temperature",
+                        subtitle: "$currentTemp°C • Ambient",
+                        icon: LucideIcons.thermometer),
 
-                const SizedBox(height: 30),
+                    _card(
+                        title: "Tithi",
+                        subtitle: currentTithi,
+                        icon: LucideIcons.moon),
 
-                _metricsGrid(),
+                    _card(
+                        title: "Nakshatra",
+                        subtitle: currentNakshatra,
+                        icon: LucideIcons.star),
 
-                const SizedBox(height: 30),
+                    const SizedBox(height: 20),
+                    _inputSection(),
+                    const SizedBox(height: 20),
 
-                _inputSection(),
+                    if (isAnalyzing)
+                      const Center(
+                          child: CircularProgressIndicator(
+                              color: Colors.white)),
+                    if (!isAnalyzing && aiResponse.isNotEmpty) _result(),
 
-                const SizedBox(height: 30),
-
-                if (isAnalyzing)
-                  const CircularProgressIndicator(color: secondaryPurple),
-
-                if (!isAnalyzing && aiResponse.isNotEmpty) _resultBox(),
-
-                const SizedBox(height: 30),
-
-                researchPaperBox(),
-
-                const SizedBox(height: 20),
-
-                _disclaimerBox(),
-
-                const SizedBox(height: 40),
-              ],
-            ),
+                    const SizedBox(height: 20),
+                    _researchBox(),
+                    const SizedBox(height: 20),
+                    _disclaimer(),
+                    const SizedBox(height: 30),
+                  ],
+                ),
+              )
+            ],
           ),
         ),
       ),
@@ -269,159 +283,117 @@ Give a structured daily routine (Dinacharya) including:
 
   // HEADER ---------------------------------------------------
   Widget _header() {
-    return Column(
-      children: [
-        Container(
-          width: 85,
-          height: 85,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const RadialGradient(
-              colors: [secondaryPurple, primaryPurple],
-            ),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 45,
-                color: secondaryPurple.withOpacity(.4),
-              )
-            ],
-          ),
-          child: const Icon(LucideIcons.sun, size: 50),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          "SOLAR MEDIC",
-          style: GoogleFonts.cinzel(
-            fontSize: 34,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
-        Text(
-          "ADVANCED HELIOTHERAPY ADVISOR",
-          style: TextStyle(
-              color: secondaryPurple.withOpacity(.8),
-              fontSize: 12,
-              letterSpacing: 1.5),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Icon(Icons.arrow_back_ios, color: Colors.white),
+          const Text("Solar Medic",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const Icon(Icons.settings, color: Colors.white),
+        ],
+      ),
     );
   }
 
-  // LOCATION -------------------------------------------------
-  Widget _locationChip() {
+  // CARD -----------------------------------------------------
+  Widget _card(
+      {required String title,
+      required String subtitle,
+      required IconData icon}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withOpacity(.08),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(LucideIcons.mapPin, color: Colors.green, size: 14),
-          const SizedBox(width: 6),
-          Text(locationText,
-              style: const TextStyle(color: Colors.grey, fontSize: 12))
+          Container(
+            height: 55,
+            width: 55,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style:
+                        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(subtitle,
+                    style: const TextStyle(fontSize: 12, color: Colors.white70)),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16)
         ],
       ),
     );
   }
 
-  // METRICS GRID ---------------------------------------------
-  Widget _metricsGrid() {
-    return GridView.count(
-      shrinkWrap: true,
-      crossAxisCount: 2,
-      childAspectRatio: 1.4,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      children: [
-        _metric("UV Index", "$currentUV",
-            currentUV < 3 ? "Low" : currentUV < 6 ? "Moderate" : "High", Colors.orange),
-        _metric("Temp", "$currentTemp°C", "Ambient", Colors.blue),
-        _metric("Tithi", currentTithi, "Vedic", primaryPurple),
-        _metric("Nakshatra", currentNakshatra, "Constellation",
-            Colors.yellow),
-      ],
-    );
-  }
-
-  // SINGLE METRIC --------------------------------------------
-  Widget _metric(String label, String value, String sub, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(label.toUpperCase(),
-              style: const TextStyle(color: Colors.grey, fontSize: 10)),
-          const SizedBox(height: 6),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(sub, style: TextStyle(fontSize: 11, color: color)),
-        ],
-      ),
-    );
-  }
-
-  // INPUT SECTION ---------------------------------------------
+  // INPUT ----------------------------------------------------
   Widget _inputSection() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.06),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text("Describe Your Condition",
-              style: TextStyle(
-                  color: secondaryPurple,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14)),
-          const SizedBox(height: 10),
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+
           TextField(
             controller: _condition,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: "e.g. Psoriasis, Vitamin D Deficiency, Eczema",
-              hintStyle: TextStyle(color: Colors.grey.shade600),
+              hintText: "e.g. Psoriasis, Vitamin D deficiency...",
+              hintStyle: const TextStyle(color: Colors.white54),
               filled: true,
-              fillColor: Colors.white.withOpacity(.05),
+              fillColor: Colors.white.withOpacity(.04),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           Row(
             children: [
               Expanded(
-                child: _gradientButton(
-                  "Instant Advice",
-                  LucideIcons.zap,
-                  [primaryPurple, const Color(0xFF4338CA)],
-                  () => _getAdvice("quick"),
+                child: ElevatedButton(
+                  onPressed: () => _getAdvice("quick"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text("Instant Advice"),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: _gradientButton(
-                  "Cosmic Routine",
-                  LucideIcons.calendarClock,
-                  [Colors.white, Colors.grey.shade300],
-                  () => _getAdvice("routine"),
-                  textColor: Colors.black,
+                child: ElevatedButton(
+                  onPressed: () => _getAdvice("routine"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text("Cosmic Routine"),
                 ),
               ),
             ],
@@ -431,184 +403,98 @@ Give a structured daily routine (Dinacharya) including:
     );
   }
 
-  // BUTTON ----------------------------------------------------
-  Widget _gradientButton(String label, IconData icon, List<Color> colors,
-      VoidCallback onTap,
-      {Color textColor = Colors.white}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: colors),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: textColor),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                    color: textColor, fontWeight: FontWeight.bold)),
-          ],
-        ),
+  // RESULT ---------------------------------------------------
+  Widget _result() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.blueAccent),
+      ),
+      child: Text(
+        aiResponse,
+        style: const TextStyle(color: Colors.white70, height: 1.5),
       ),
     );
   }
 
-  // RESULT ----------------------------------------------------
-  Widget _resultBox() {
+  // RESEARCH -------------------------------------------------
+  Widget _researchBox() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.06),
-        borderRadius: BorderRadius.circular(16),
-        border: const Border(
-          left: BorderSide(color: primaryPurple, width: 4),
-        ),
+        color: Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
-              Icon(LucideIcons.clipboardCheck,
-                  color: secondaryPurple, size: 18),
-              SizedBox(width: 8),
-              Text("Result",
-                  style: TextStyle(
-                      color: secondaryPurple,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(aiResponse,
-              style: const TextStyle(color: Colors.white70, height: 1.5)),
-        ],
-      ),
-    );
-  }
-
-  // ----------------------------------------------------------
-  // RESEARCH PAPER BOX
-  // ----------------------------------------------------------
-  Widget researchPaperBox() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: secondaryPurple.withOpacity(0.3), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Icon(LucideIcons.fileText, color: secondaryPurple, size: 18),
-              SizedBox(width: 8),
-              Text(
-                "CLINICAL REFERENCE",
-                style: TextStyle(
-                  color: secondaryPurple,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          const Text(
-            "TITLE:\nPhototherapy and Environmental UV Effects on Human Skin",
-            style: TextStyle(color: Colors.white, fontSize: 13, height: 1.5),
-          ),
-
+          const Text("CLINICAL REFERENCE",
+              style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-
           const Text(
-            "JOURNAL:\nScience of the Total Environment (Elsevier)",
+            "Phototherapy and Environmental UV Effects on Human Skin.\n"
+            "Journal: Science of the Total Environment (Elsevier).",
             style: TextStyle(color: Colors.white70, fontSize: 12),
           ),
-
           const SizedBox(height: 10),
-
-          const Text(
-            "SUMMARY:\nThis study examines UV light therapy, environmental UV exposure, "
-            "and their effects on skin diseases like psoriasis, vitiligo, and "
-            "UV-based cancer therapies.",
-            style: TextStyle(color: Colors.grey, fontSize: 12, height: 1.4),
-          ),
-
-          const SizedBox(height: 14),
-
           GestureDetector(
-            onTap: () => launchUrl(Uri.parse(
-                "https://www.sciencedirect.com/science/article/pii/S0160412024001211")),
+            onTap: () => launchUrl(
+              Uri.parse(
+                  "https://www.sciencedirect.com/science/article/pii/S0160412024001211"),
+            ),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: primaryPurple,
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.blueAccent,
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Text(
-                    "Open Research Paper",
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(LucideIcons.externalLink,
-                      size: 14, color: Colors.white),
-                ],
-              ),
+              child: const Text("Open Research Paper",
+                  style: TextStyle(color: Colors.white)),
             ),
-          ),
+          )
         ],
       ),
     );
   }
 
-  // ----------------------------------------------------------
-  // DISCLAIMER
-  // ----------------------------------------------------------
-  Widget _disclaimerBox() {
+  // DISCLAIMER ----------------------------------------------
+  Widget _disclaimer() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.redAccent.withOpacity(.15),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: const Text(
         "⚠️ This app provides general heliotherapy advice only. "
-        "It is NOT a medical diagnosis or a substitute for professional treatment.",
-        style: TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          height: 1.4,
-          fontWeight: FontWeight.w600,
-        ),
+        "It is NOT a medical diagnosis or professional replacement.",
         textAlign: TextAlign.center,
+        style: TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.w600,
+            fontSize: 11),
       ),
     );
+  }
+
+  // UV DESC --------------------------------------------------
+  String _uvDesc(double uv) {
+    if (uv < 3) return "Low (Safe)";
+    if (uv < 6) return "Moderate";
+    return "High (Caution)";
   }
 }
 
 // ----------------------------------------------------------
-// PANCHANG CALCULATOR (FIXED)
+// PANCHANG CALCULATOR
 // ----------------------------------------------------------
 class PanchangCalculator {
-  static double deg2rad(double d) => d * math.pi / 180.0;
-
-  static double norm(double a) {
-    a %= 360;
-    if (a < 0) a += 360;
-    return a;
+  static double deg2rad(double d) => d * math.pi / 180;
+  static double norm(double x) {
+    x %= 360;
+    return x < 0 ? x + 360 : x;
   }
 
   static Map<String, String> calculate(DateTime date) {
@@ -620,7 +506,7 @@ class PanchangCalculator {
         utc.day + utc.hour / 24 + utc.minute / 1440 + utc.second / 86400;
 
     if (M <= 2) {
-      Y -= 1;
+      Y--;
       M += 12;
     }
 
@@ -644,19 +530,19 @@ class PanchangCalculator {
     // Moon
     double Lm = norm(218.316 + 13.176396 * T);
     double Mm = norm(134.963 + 13.064993 * T);
-    double lambdaMoon = norm(Lm + 6.289 * math.sin(deg2rad(Mm)));
+    double lambdaMoon =
+        norm(Lm + 6.289 * math.sin(deg2rad(Mm)));
 
     // Ayanamsa (approx Lahiri)
     double ay = 24.0 + (utc.year - 2000) * 0.014;
 
-    // Sidereal
     double sidSun = norm(lambdaSun - ay);
     double sidMoon = norm(lambdaMoon - ay);
 
-    // TITHI
+    // Tithi
     double elong = norm(sidMoon - sidSun);
     int tNo = (elong / 12).floor() + 1;
-    if (tNo > 30) tNo = 30;
+    tNo = tNo.clamp(1, 30);
 
     const names = [
       "Pratipada",
@@ -676,14 +562,12 @@ class PanchangCalculator {
       "Purnima/Amavasya"
     ];
 
-    String tithi = tNo <= 15
-        ? "Shukla ${names[tNo - 1]}"
-        : "Krishna ${names[tNo - 16]}";
+    String tithi =
+        tNo <= 15 ? "Shukla ${names[tNo - 1]}" : "Krishna ${names[tNo - 16]}";
 
-    // NAKSHATRA
-    int nIndex = (sidMoon / (360 / 27)).floor() % 27;
-
-    const nakList = [
+    // Nakshatra
+    int index = (sidMoon / (360 / 27)).floor() % 27;
+    const nak = [
       "Ashwini",
       "Bharani",
       "Krittika",
@@ -713,6 +597,6 @@ class PanchangCalculator {
       "Revati"
     ];
 
-    return {"tithi": tithi, "nakshatra": nakList[nIndex]};
+    return {"tithi": tithi, "nakshatra": nak[index]};
   }
 }
