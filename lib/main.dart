@@ -14,7 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 // ----------------------------------------------------------
 // CONFIG
 // ----------------------------------------------------------
-const String API_KEY = "AIzaSyDC6zPeu-RHNCd0n5yeds-UmqsDfv0Rtko"; // <-- ADD GEMINI KEY HERE
+const String API_KEY = ""; // <-- ADD GEMINI KEY HERE
 
 const Color bgTop = Color(0xFF4A1F8E);
 const Color bgBottom = Color(0xFF1A0A3A);
